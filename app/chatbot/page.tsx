@@ -13,87 +13,99 @@ import {
   Terminal,
   Loader2,
   Download,
+  ShieldCheck,
+  AlertTriangle,
+  X // 🆕 Added X for closing the terminal
 } from 'lucide-react';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import ReactMarkdown from 'react-markdown';
 import { jsPDF } from "jspdf";
 
-// Define message type including the new TIMESTAMP field
 type Message = {
   role: string;
   content: string;
   type?: 'general' | 'analysis' | 'optimization';
   isHidden?: boolean;
-  timestamp: string; // ✅ New field to fix hydration error
+  timestamp: string;
 };
 
-// Helper to get current time string
 const getCurrentTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+// 🧠 SUPER SMART LANGUAGE DETECTOR
+const detectLanguage = (codeString: string) => {
+  const code = codeString.toLowerCase();
+  
+  if (code.includes('using system;') || code.includes('console.writeline') || code.includes('namespace ')) {
+    return { name: 'C#', syntax: 'csharp', file: 'Program.cs' };
+  } else if (code.includes('std::') || code.includes('#include <iostream>') || code.includes('cout <<') || code.includes('cin >>') || code.includes('using namespace std;')) {
+    return { name: 'C++', syntax: 'cpp', file: 'main.cpp' };
+  } else if (code.includes('#include <stdio.h>') || code.includes('printf(') || code.includes('malloc(')) {
+    return { name: 'C', syntax: 'c', file: 'main.c' };
+  } else if (code.includes('section .data') || code.includes('global _start') || (/\bmov\b/.test(code) && /\bpush\b/.test(code)) || code.includes('syscall')) {
+    return { name: 'Assembly', syntax: 'x86asm', file: 'program.asm' };
+  } else if ((/\bdef\b/.test(code) && !code.includes(':')) || code.includes('puts ') || (/\bdef\b/.test(code) && /\bend\b/.test(code))) {
+    return { name: 'Ruby', syntax: 'ruby', file: 'script.rb' };
+  } else if (code.includes('public static void main') || code.includes('system.out.print')) {
+    return { name: 'Java', syntax: 'java', file: 'Main.java' };
+  } else if (code.includes('import react') || code.includes('use client') || code.includes('usestate')) {
+    return { name: 'React', syntax: 'tsx', file: 'component.tsx' };
+  } else if (code.includes('interface ') || code.includes('type ') || (code.includes('const ') && code.includes(':'))) {
+    return { name: 'TypeScript', syntax: 'typescript', file: 'script.ts' };
+  } else if ((/\bdef\b/.test(code) && code.includes(':')) || code.includes('print(') || code.includes('import sys') || code.includes('"""')) {
+    return { name: 'Python', syntax: 'python', file: 'script.py' };
+  } else if (code.includes('const ') || code.includes('let ') || code.includes('console.log') || code.includes('=>') || code.includes('function(')) {
+    return { name: 'JavaScript', syntax: 'javascript', file: 'script.js' };
+  } else if (code.includes('<html>') || code.includes('<div>') || code.includes('<!doctype html>')) {
+    return { name: 'HTML', syntax: 'html', file: 'index.html' };
+  }
+  return { name: 'Plain Text', syntax: 'text', file: 'snippet.txt' };
+};
+
 export default function ChatbotPage() {
-  const [code, setCode] = useState(`print("""
- ██████╗ ██████╗ ██████╗ ███████╗    ██╗     ███████╗███╗   ██╗███████╗
-██╔════╝██╔═══██╗██╔══██╗██╔════╝    ██║     ██╔════╝████╗  ██║██╔════╝
-██║     ██║   ██║██║  ██║█████╗      ██║     █████╗  ██╔██╗ ██║███████╗
-██║     ██║   ██║██║  ██║██╔══╝      ██║     ██╔══╝  ██║╚██╗██║╚════██║
-╚██████╗╚██████╔╝██████╔╝███████╗    ███████╗███████╗██║ ╚████║███████║
- ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝
-""")
-
-team_name = "Team Kernel"
+  const [code, setCode] = useState(`team_name = "Team Kernel"
 team_size = 3
-print(f"""
+print(f"Built by: {team_name} | Size: {team_size}")
+print("Sharper Reviews. Smarter Code.")
+`);
 
-Built by: {team_name}
-Team Size: {team_size}
-
-Sharper Reviews. Smarter Code.
-
-""")`);
-
-  // Initialize with a static timestamp or current time (client-side only logic handled by useEffect usually, 
-  // but for initial state it's safer to use a fixed string or handle hydration carefully. 
-  // For simplicity in this hackathon, we initialize with a generic time or wait for mount.)
-  // However, simpler fix: just use empty string and update on mount, OR just use getCurrentTime() 
-  // but we must ensure this runs on client. 
-  // SAFEST FIX: We define the state, but we suppress hydration warning on the timestamp span or use a mounted check.
-  // actually, simply defining it here usually works if we don't rely on server-exact matching for the initial state 
-  // OR we can just hardcode the welcome message time.
   const [messages, setMessages] = useState<Message[]>([
-    { 
-      role: 'ai', 
-      content: 'Hello There! I am ready to Analyze or Optimize your code.', 
-      type: 'general',
-      timestamp: 'Now' 
-    }
+    { role: 'ai', content: 'Hello There! I am ready to Analyze or Optimize your code.', type: 'general', timestamp: 'Now' }
   ]);
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [mounted, setMounted] = useState(false); // To prevent hydration mismatch on initial render
+  const [mounted, setMounted] = useState(false);
+  
+  // METRICS STATE
+  const [healthScore, setHealthScore] = useState<number | null>(null);
+  const [timeComplexity, setTimeComplexity] = useState<string | null>(null);
+  const [spaceComplexity, setSpaceComplexity] = useState<string | null>(null);
+  const [oldTimeComplexity, setOldTimeComplexity] = useState<string | null>(null);
+
+  // 🆕 TERMINAL STATE FOR "RUN"
+  const [terminalOutput, setTerminalOutput] = useState<string | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
   const lineNumberRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const syntaxRef = useRef<HTMLDivElement>(null); // 🆕 Added to fix scrolling bug
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Ensure we only render dynamic content after mount
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const activeLanguage = detectLanguage(code);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-  
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
 
+  // 🛠️ FIXED: Synchronize scrolling perfectly
   const handleScroll = () => {
-    if (lineNumberRef.current && textareaRef.current) {
-      lineNumberRef.current.scrollTop = textareaRef.current.scrollTop;
+    if (textareaRef.current) {
+      if (lineNumberRef.current) lineNumberRef.current.scrollTop = textareaRef.current.scrollTop;
+      if (syntaxRef.current) {
+        syntaxRef.current.scrollTop = textareaRef.current.scrollTop;
+        syntaxRef.current.scrollLeft = textareaRef.current.scrollLeft;
+      }
     }
   };
 
@@ -101,6 +113,33 @@ Sharper Reviews. Smarter Code.
     navigator.clipboard.writeText(code);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  // 🚀 NEW: Simulate Code Execution
+  const handleRun = async () => {
+    setIsExecuting(true);
+    setTerminalOutput('Initializing environment...\nRunning...');
+    
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            message: `Act strictly as a compiler/interpreter for ${activeLanguage.name}. Execute the following code and return ONLY the raw console output it would produce. If there are compilation or runtime errors, output the exact error message. DO NOT wrap the output in markdown code blocks. DO NOT explain anything. DO NOT converse. ONLY output the raw terminal result:\n\n${code}`, 
+            code: code, 
+            history: [] // No history needed for pure execution
+        }),
+      });
+
+      const data = await response.json();
+      // Strip out markdown if AI tries to wrap it in ```
+      let output = data.response.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
+      setTerminalOutput(output || 'Process finished with exit code 0 (No output)');
+    } catch (error) {
+      setTerminalOutput('Execution failed. Network or server error.');
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const handleExportPDF = (content: string) => {
@@ -118,16 +157,19 @@ Sharper Reviews. Smarter Code.
     doc.setTextColor(100);
     doc.setFont("helvetica", "normal");
     doc.text(`Generated by CodeLens • ${new Date().toLocaleString()}`, margin, 30);
+
+    if (healthScore !== null) {
+       doc.setFontSize(11);
+       doc.setTextColor(healthScore >= 80 ? 'green' : 'red');
+       doc.text(`Health: ${healthScore}/100`, margin + 110, 25);
+       if (timeComplexity) doc.text(`Time: ${oldTimeComplexity ? oldTimeComplexity + ' -> ' : ''}${timeComplexity}`, margin + 110, 30);
+    }
     
     doc.setDrawColor(200);
     doc.setLineWidth(0.5);
     doc.line(margin, 35, 190, 35);
 
-    const cleanContent = content
-      .replace(/\*\*/g, "") 
-      .replace(/###/g, "")  
-      .replace(/`/g, "");   
-
+    const cleanContent = content.replace(/\*\*/g, "").replace(/###/g, "").replace(/`/g, "");   
     const lines = cleanContent.split('\n');
 
     lines.forEach((line) => {
@@ -146,14 +188,12 @@ Sharper Reviews. Smarter Code.
             doc.setFontSize(13);
             doc.text(trimmedLine, margin, y);
             y += 8; 
-
         } else if (isBullet) {
             doc.setTextColor(0, 51, 102); 
             const cleanLine = "•  " + trimmedLine.replace(/^[*|-]/, '').trim();
             const splitLines = doc.splitTextToSize(cleanLine, pageWidth);
             doc.text(splitLines, margin, y);
             y += (splitLines.length * 6) + 2; 
-
         } else {
             if (trimmedLine.length > 0) {
                 const splitLines = doc.splitTextToSize(trimmedLine, pageWidth);
@@ -170,8 +210,7 @@ Sharper Reviews. Smarter Code.
 
     doc.setFontSize(9);
     doc.setTextColor(150);
-    doc.text("Powered by Groq & Team Kernel", margin, 285);
-
+    doc.text("Powered by CodeLens & Team Kernel", margin, 285);
     doc.save("CodeLens-Report.pdf");
   };
 
@@ -181,33 +220,25 @@ Sharper Reviews. Smarter Code.
     setIsLoading(true);
     
     const newHistory = [...messages];
-    const isHidden = messageType !== 'general';
+    let finalPrompt = userPrompt;
     
-    // ✅ Add timestamp here
-    newHistory.push({ 
-        role: 'user', 
-        content: userPrompt, 
-        type: 'general', 
-        isHidden: isHidden,
-        timestamp: getCurrentTime()
-    });
-    
+    if (messageType === 'analysis') {
+        setOldTimeComplexity(null); 
+        finalPrompt += " Evaluate code quality (0-100), Time Complexity, and Space Complexity. Return them strictly at the very end in this exact format: [SCORE: number] [TIME: O(N)] [SPACE: O(1)].";
+    } else if (messageType === 'optimization') {
+        finalPrompt += " Optimize this code to the absolute best possible Time and Space Complexity. Return the new code. At the very end, provide the new score, the old time complexity, and the new time complexity in this exact format: [SCORE: number] [OLD_TIME: O(N^2)] [NEW_TIME: O(N)] [NEW_SPACE: O(1)].";
+    }
+
+    newHistory.push({ role: 'user', content: userPrompt, type: 'general', isHidden: messageType !== 'general', timestamp: getCurrentTime() });
     setMessages(newHistory);
 
     try {
-      const historyForAI = newHistory.map(m => ({ 
-          role: m.role === 'ai' ? 'assistant' : 'user', 
-          content: m.content 
-      }));
+      const historyForAI = newHistory.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content }));
 
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userPrompt,
-          code: code,
-          history: historyForAI
-        }),
+        body: JSON.stringify({ message: finalPrompt, code: code, history: historyForAI }),
       });
 
       const data = await response.json();
@@ -219,57 +250,60 @@ Sharper Reviews. Smarter Code.
       let chatDisplayMessage = aiText;
 
       if (match && match[1]) {
-        const extractedCode = match[1].trim();
-        setCode(extractedCode);
+        setCode(match[1].trim());
         chatDisplayMessage = aiText.replace(codeBlockRegex, '').trim();
-
-        if (!chatDisplayMessage) {
-          chatDisplayMessage = "✅ I have optimized the code as requested.";
-        }
+        if (!chatDisplayMessage) chatDisplayMessage = "✅ I have optimized the code to the best possible complexity.";
       }
 
-      // ✅ Add timestamp here too
-      setMessages(prev => [...prev, { 
-          role: 'ai', 
-          content: chatDisplayMessage, 
-          type: messageType,
-          timestamp: getCurrentTime()
-      }]);
+      const scoreMatch = chatDisplayMessage.match(/\[SCORE:\s*(\d+)\]/i);
+      const timeMatch = chatDisplayMessage.match(/\[TIME:\s*(O\([^)]+\))\]/i);
+      const spaceMatch = chatDisplayMessage.match(/\[SPACE:\s*(O\([^)]+\))\]/i);
+      const oldTimeMatch = chatDisplayMessage.match(/\[OLD_TIME:\s*(O\([^)]+\))\]/i);
+      const newTimeMatch = chatDisplayMessage.match(/\[NEW_TIME:\s*(O\([^)]+\))\]/i);
+      const newSpaceMatch = chatDisplayMessage.match(/\[NEW_SPACE:\s*(O\([^)]+\))\]/i);
+      
+      if (scoreMatch) setHealthScore(parseInt(scoreMatch[1]));
+      if (timeMatch) setTimeComplexity(timeMatch[1]);
+      if (spaceMatch) setSpaceComplexity(spaceMatch[1]);
+      
+      if (oldTimeMatch) setOldTimeComplexity(oldTimeMatch[1]);
+      if (newTimeMatch) setTimeComplexity(newTimeMatch[1]);
+      if (newSpaceMatch) setSpaceComplexity(newSpaceMatch[1]);
+
+      chatDisplayMessage = chatDisplayMessage
+          .replace(/\[SCORE:\s*\d+\]/gi, '')
+          .replace(/\[TIME:\s*O\([^)]+\)\]/gi, '')
+          .replace(/\[SPACE:\s*O\([^)]+\)\]/gi, '')
+          .replace(/\[OLD_TIME:\s*O\([^)]+\)\]/gi, '')
+          .replace(/\[NEW_TIME:\s*O\([^)]+\)\]/gi, '')
+          .replace(/\[NEW_SPACE:\s*O\([^)]+\)\]/gi, '')
+          .trim();
+
+      setMessages(prev => [...prev, { role: 'ai', content: chatDisplayMessage, type: messageType, timestamp: getCurrentTime() }]);
 
     } catch (error) {
-      setMessages(prev => [...prev, { 
-          role: 'ai', 
-          content: "Error connecting to AI. Check API Key.", 
-          type: 'general',
-          timestamp: getCurrentTime()
-      }]);
+      setMessages(prev => [...prev, { role: 'ai', content: "Error connecting to AI.", type: 'general', timestamp: getCurrentTime() }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSend = () => {
-    if(!input.trim()) return;
-    const msg = input;
-    setInput('');
-    callGroqAPI(msg, 'general');
-  };
+  const handleSend = () => { if(!input.trim()) return; callGroqAPI(input, 'general'); setInput(''); };
+  const handleAnalyze = () => { callGroqAPI(`Analyze this ${activeLanguage.name} code for logic, security, and performance issues. DO NOT rewrite the code.`, 'analysis'); };
+  const handleOptimize = () => { callGroqAPI(`Optimize this ${activeLanguage.name} code for better performance and readability. Return the full updated code block.`, 'optimization'); };
 
-  const handleAnalyze = () => {
-    callGroqAPI("Analyze this code for logic, security, and performance issues. Provide a detailed bullet-point report. DO NOT rewrite the code.", 'analysis');
-  };
-
-  const handleOptimize = () => {
-    callGroqAPI("Optimize this code for better performance and readability. Return the full updated code block.", 'optimization');
-  };
-
-  // Prevent rendering until client is mounted to avoid hydration mismatch
   if (!mounted) return null; 
+
+  const getScoreColor = (score: number) => {
+      if (score >= 80) return "text-green-400 border-green-500/30 bg-green-500/10";
+      if (score >= 50) return "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
+      return "text-red-400 border-red-500/30 bg-red-500/10";
+  };
 
   return (
     <div className="flex h-screen w-full bg-zinc-950 text-gray-200 font-sans overflow-hidden">
       
-      {/* LEFT COLUMN: Code Editor */}
+      {/* LEFT COLUMN: Code Editor & Terminal */}
       <div className="flex-1 flex flex-col border-r border-white/5 relative min-h-0">
         
         {/* Header */}
@@ -277,44 +311,59 @@ Sharper Reviews. Smarter Code.
           <div className="flex items-center gap-4">
              <div className="flex items-center gap-2 text-sm text-gray-400 hover:text-white cursor-pointer transition-colors group">
                 <Code className="w-4 h-4 group-hover:text-blue-400 transition-colors" />
-                <span className="font-medium">script.py</span>
+                <span className="font-medium">{activeLanguage.file}</span>
              </div>
-             <span className="text-zinc-700">/</span>
-             <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Editable</span>
+
+             {healthScore !== null && (
+                 <div className="flex items-center gap-2 ml-2 animate-in fade-in zoom-in">
+                     <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border ${getScoreColor(healthScore)}`}>
+                         {healthScore >= 80 ? <ShieldCheck className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                         <span className="text-[11px] font-bold">Score: {healthScore}</span>
+                     </div>
+                     {timeComplexity && (
+                         <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border border-purple-500/30 bg-purple-500/10 text-purple-400">
+                             <span className="text-[11px] font-bold font-mono">
+                                 ⏱️ {oldTimeComplexity ? `${oldTimeComplexity} ➔ ${timeComplexity}` : timeComplexity}
+                             </span>
+                         </div>
+                     )}
+                     {spaceComplexity && (
+                         <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+                             <span className="text-[11px] font-bold font-mono">💾 {spaceComplexity}</span>
+                         </div>
+                     )}
+                 </div>
+             )}
           </div>
 
           <div className="flex items-center gap-3">
+             {/* 🚀 NEW RUN BUTTON */}
              <button 
-               onClick={handleCopy}
-               className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-gray-300 rounded-lg transition-all"
+                onClick={handleRun} 
+                disabled={isExecuting} 
+                className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 text-xs font-bold rounded-lg transition-all disabled:opacity-50"
              >
-                {isCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                {isCopied ? 'Copied!' : 'Copy'}
+                {isExecuting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3 fill-current" />} Run
              </button>
 
-             <button 
-                onClick={handleAnalyze}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-1.5 bg-blue-600/10 text-blue-400 border border-blue-600/20 text-xs font-bold rounded-lg hover:bg-blue-600/20 transition-all disabled:opacity-50"
-             >
-                {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
-                Analyze
+             <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-gray-300 rounded-lg transition-all">
+                {isCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />} Copy
              </button>
 
-             <button 
-                onClick={handleOptimize}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-1.5 bg-white text-black text-xs font-bold rounded-lg hover:bg-gray-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)] disabled:opacity-50"
-             >
-                {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-current" />}
-                Optimize
+             <button onClick={handleAnalyze} disabled={isLoading} className="flex items-center gap-2 px-4 py-1.5 bg-blue-600/10 text-blue-400 border border-blue-600/20 text-xs font-bold rounded-lg hover:bg-blue-600/20 transition-all disabled:opacity-50">
+                {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />} Analyze
+             </button>
+
+             <button onClick={handleOptimize} disabled={isLoading} className="flex items-center gap-2 px-4 py-1.5 bg-white text-black text-xs font-bold rounded-lg hover:bg-gray-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)] disabled:opacity-50">
+                {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-current" />} Optimize
              </button>
           </div>
         </div>
 
-        {/* Editor Area */}
+       {/* Editor Area */}
         <div className="flex-1 relative group min-h-0 bg-zinc-900/20 overflow-hidden flex flex-col">
-          <div className="flex-1 overflow-auto flex relative">
+          <div className="flex-1 flex relative overflow-hidden">
+            {/* 🛠️ SCROLL FIX: Line numbers now sync with the main scroll area */}
             <div 
               ref={lineNumberRef}
               className="w-12 bg-transparent border-r border-white/5 flex flex-col items-end pt-4 pr-3 text-zinc-600 text-sm font-mono select-none overflow-hidden flex-shrink-0"
@@ -324,30 +373,81 @@ Sharper Reviews. Smarter Code.
                ))}
             </div>
 
-            <div className="flex-1 relative">
-              <div className="absolute inset-0 overflow-auto pointer-events-none">
+            {/* 🛠️ SCROLL FIX: Made this container the single source of truth for scrolling */}
+            <div 
+                className="flex-1 relative font-mono text-sm overflow-auto"
+                onScroll={(e) => {
+                    if (lineNumberRef.current) {
+                        lineNumberRef.current.scrollTop = e.currentTarget.scrollTop;
+                    }
+                }}
+            >
+              <div ref={syntaxRef} className="absolute inset-0 pointer-events-none p-4 pb-20 min-w-max">
                 <SyntaxHighlighter
-                  language="python"
+                  language={activeLanguage.syntax}
                   style={atomOneDark}
-                  customStyle={{ backgroundColor: 'transparent', padding: '1rem', margin: 0, fontSize: '0.875rem', lineHeight: '1.5rem', fontFamily: 'monospace' }}
+                  customStyle={{ 
+                      backgroundColor: 'transparent', 
+                      padding: 0, 
+                      margin: 0, 
+                      fontFamily: 'inherit', 
+                      fontSize: 'inherit', 
+                      lineHeight: '1.5rem',
+                      tabSize: 4
+                  }}
+                  codeTagProps={{
+                      style: { 
+                          fontFamily: 'inherit', 
+                          fontSize: 'inherit', 
+                          lineHeight: '1.5rem',
+                          tabSize: 4
+                      }
+                  }}
                   showLineNumbers={false}
+                  wrapLines={false}
                 >
                   {code}
                 </SyntaxHighlighter>
               </div>
+              
               <textarea
                 ref={textareaRef}
-                onScroll={handleScroll}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 spellCheck="false"
-                className="absolute inset-0 w-full h-full bg-transparent text-transparent font-mono text-sm leading-6 p-4 resize-none focus:outline-none placeholder:text-transparent overflow-auto whitespace-pre caret-white"
+                wrap="off" 
+                // 🛠️ SCROLL FIX: Removed overflow-auto from the textarea itself, let parent handle it. Added min-h-full.
+                className="absolute inset-0 min-w-full min-h-full bg-transparent text-transparent p-4 pb-20 resize-none focus:outline-none placeholder:text-transparent caret-white whitespace-pre overflow-hidden"
+                style={{ 
+                    fontFamily: 'inherit', 
+                    fontSize: 'inherit',
+                    lineHeight: '1.5rem',
+                    letterSpacing: 'normal',
+                    wordSpacing: 'normal',
+                    tabSize: 4
+                }}
                 placeholder="// Paste your code here..."
-                style={{ caretColor: 'white' }} 
               />
             </div>
           </div>
         </div>
+
+        {/* 🚀 NEW: Terminal Output Window */}
+        {terminalOutput !== null && (
+          <div className="h-48 flex-none border-t border-white/10 bg-black flex flex-col relative z-20 animate-in slide-in-from-bottom-5">
+             <div className="h-8 flex items-center justify-between px-4 border-b border-white/5 bg-zinc-900/50">
+                <span className="text-xs font-mono text-zinc-400 flex items-center gap-2">
+                   <Terminal className="w-3 h-3"/> Console Output
+                </span>
+                <button onClick={() => setTerminalOutput(null)} className="text-zinc-500 hover:text-white transition-colors">
+                   <X className="w-3 h-3" />
+                </button>
+             </div>
+             <div className="flex-1 p-4 font-mono text-sm overflow-auto whitespace-pre-wrap text-green-400">
+                {isExecuting ? <span className="animate-pulse flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Executing...</span> : terminalOutput}
+             </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="h-10 flex-none border-t border-white/5 bg-zinc-900/40 backdrop-blur-md flex items-center px-4 gap-6 text-xs text-zinc-500 font-mono">
@@ -359,7 +459,7 @@ Sharper Reviews. Smarter Code.
               <span>Ln {code.split('\n').length}, Col 1</span>
               <span className="w-px h-3 bg-zinc-700"></span>
               <span>UTF-8</span>
-              <span>Python</span>
+              <span>{activeLanguage.name}</span>
            </div>
         </div>
       </div>
@@ -407,33 +507,20 @@ Sharper Reviews. Smarter Code.
                        </ReactMarkdown>
                    </div>
                    
-                   {/* Meta Data Row & Action Bar */}
                    <div className="flex items-center gap-2 mt-2 px-1">
                       <span className="text-[10px] text-zinc-500 font-medium tracking-wide">
-                        {/* ✅ FIXED: Use the stored timestamp, not new Date() */}
                         {msg.role === 'user' ? 'You' : 'AI'} • {msg.timestamp}
                       </span>
                       
-                      {/* ACTION BAR */}
                       {msg.role === 'ai' && (
                         <div className="flex items-center gap-3 ml-2">
-                           <button 
-                             onClick={() => navigator.clipboard.writeText(msg.content)}
-                             className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-white transition-colors" 
-                             title="Copy Text"
-                           >
-                              <Copy className="w-3 h-3" />
-                              <span>Copy</span>
+                           <button onClick={() => navigator.clipboard.writeText(msg.content)} className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-white transition-colors" title="Copy Text">
+                              <Copy className="w-3 h-3" /> <span>Copy</span>
                            </button>
 
                            {msg.type === 'analysis' && (
-                               <button 
-                                 onClick={() => handleExportPDF(msg.content)}
-                                 className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 px-2 py-0.5 rounded-full bg-blue-500/10" 
-                                 title="Export Audit Report"
-                               >
-                                  <Download className="w-3 h-3" />
-                                  <span>Export PDF</span>
+                               <button onClick={() => handleExportPDF(msg.content)} className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 px-2 py-0.5 rounded-full bg-blue-500/10" title="Export Audit Report">
+                                  <Download className="w-3 h-3" /> <span>Export PDF</span>
                                </button>
                            )}
                         </div>
@@ -465,17 +552,13 @@ Sharper Reviews. Smarter Code.
             />
             <span className="block h-4 w-0.5 border-l bg-white/10"></span>
             
-            <button 
-                onClick={handleSend}
-                disabled={isLoading}
-                className="bg-white/10 group-hover:bg-white/20 size-6 overflow-hidden rounded-full duration-500 cursor-pointer flex-shrink-0 disabled:opacity-50"
-            >
+            <button onClick={handleSend} disabled={isLoading} className="bg-white/10 group-hover:bg-white/20 size-6 overflow-hidden rounded-full duration-500 cursor-pointer flex-shrink-0 disabled:opacity-50">
               <div className="flex w-12 -translate-x-1/2 duration-500 ease-in-out group-hover:translate-x-0">
                 <span className="flex size-6 items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
                 </span>
                 <span className="flex size-6 items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
                 </span>
               </div>
             </button>

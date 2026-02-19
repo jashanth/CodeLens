@@ -135,7 +135,10 @@ export default function HeroSection() {
                                         asChild
                                         size="lg"
                                         className="group relative rounded-xl px-6 text-base shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(155,153,254,0.35),0_0_60px_rgba(43,200,183,0.2)] active:scale-100">
-                                        <Link href="/chatbot" className="inline-flex items-center gap-2">
+                                        
+                                        {/* 👇 Added prefetch={true} right here 👇 */}
+                                        <Link href="/chatbot" prefetch={true} className="inline-flex items-center gap-2">
+                                            
                                             <span className="text-nowrap">Launch CodeLens</span>
                                             <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
                                         </Link>
