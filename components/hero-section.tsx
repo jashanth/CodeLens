@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { TextEffect } from '@/components/ui/text-effect'
 import { AnimatedGroup } from '@/components/ui/animated-group'
 import { HeroHeader } from './header'
+import LightRays from './LightRays'
 
 const transitionVariants = {
     item: {
@@ -31,7 +32,24 @@ export default function HeroSection() {
     return (
         <>
             <HeroHeader />
-            <main className="overflow-hidden">
+            <main className="relative overflow-hidden">
+                <div className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[600px] w-full">
+                    <LightRays
+                        raysOrigin="top-center"
+                        raysColor="#ffffff"
+                        raysSpeed={1}
+                        lightSpread={0.5}
+                        rayLength={3}
+                        followMouse={true}
+                        mouseInfluence={0.1}
+                        noiseAmount={0}
+                        distortion={0}
+                        className="custom-rays"
+                        pulsating={false}
+                        fadeDistance={1}
+                        saturation={1}
+                    />
+                </div>
                 <div
                     aria-hidden
                     className="absolute inset-0 isolate hidden opacity-65 contain-strict lg:block">
@@ -113,26 +131,13 @@ export default function HeroSection() {
                                         ...transitionVariants,
                                     }}
                                     className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
-                                    <div
-                                        key={1}
-                                        className="bg-foreground/10 rounded-[calc(var(--radius-xl)+0.125rem)] border p-0.5">
-                                        <Button
-                                            asChild
-                                            size="lg"
-                                            className="rounded-xl px-5 text-base">
-                                            <Link href="#link">
-                                                <span className="text-nowrap">Start Building</span>
-                                            </Link>
-                                        </Button>
-                                    </div>
                                     <Button
-                                        key={2}
                                         asChild
                                         size="lg"
-                                        variant="ghost"
-                                        className="h-10.5 rounded-xl px-5">
-                                        <Link href="#link">
-                                            <span className="text-nowrap">Request a demo</span>
+                                        className="group relative rounded-xl px-6 text-base shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(155,153,254,0.35),0_0_60px_rgba(43,200,183,0.2)] active:scale-100">
+                                        <Link href="/chatbot" className="inline-flex items-center gap-2">
+                                            <span className="text-nowrap">Launch CodeLens</span>
+                                            <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
                                         </Link>
                                     </Button>
                                 </AnimatedGroup>
