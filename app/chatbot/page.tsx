@@ -15,7 +15,7 @@ import {
   Download,
   ShieldCheck,
   AlertTriangle,
-  X // 🆕 Added X for closing the terminal
+  X
 } from 'lucide-react';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
@@ -84,13 +84,13 @@ print("Sharper Reviews. Smarter Code.")
   const [spaceComplexity, setSpaceComplexity] = useState<string | null>(null);
   const [oldTimeComplexity, setOldTimeComplexity] = useState<string | null>(null);
 
-  // 🆕 TERMINAL STATE FOR "RUN"
+  // TERMINAL STATE
   const [terminalOutput, setTerminalOutput] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
 
   const lineNumberRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const syntaxRef = useRef<HTMLDivElement>(null); // 🆕 Added to fix scrolling bug
+  const syntaxRef = useRef<HTMLDivElement>(null); 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeLanguage = detectLanguage(code);
@@ -98,24 +98,28 @@ print("Sharper Reviews. Smarter Code.")
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
 
-  // 🛠️ FIXED: Synchronize scrolling perfectly
-  const handleScroll = () => {
-    if (textareaRef.current) {
-      if (lineNumberRef.current) lineNumberRef.current.scrollTop = textareaRef.current.scrollTop;
-      if (syntaxRef.current) {
-        syntaxRef.current.scrollTop = textareaRef.current.scrollTop;
-        syntaxRef.current.scrollLeft = textareaRef.current.scrollLeft;
+  // 🛠️ FIXED: Safe Copy to Clipboard
+  const handleCopy = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = code;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
       }
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
-
-  // 🚀 NEW: Simulate Code Execution
+  // 🚀 Simulate Code Execution
   const handleRun = async () => {
     setIsExecuting(true);
     setTerminalOutput('Initializing environment...\nRunning...');
@@ -127,12 +131,11 @@ print("Sharper Reviews. Smarter Code.")
         body: JSON.stringify({ 
             message: `Act strictly as a compiler/interpreter for ${activeLanguage.name}. Execute the following code and return ONLY the raw console output it would produce. If there are compilation or runtime errors, output the exact error message. DO NOT wrap the output in markdown code blocks. DO NOT explain anything. DO NOT converse. ONLY output the raw terminal result:\n\n${code}`, 
             code: code, 
-            history: [] // No history needed for pure execution
+            history: [] 
         }),
       });
 
       const data = await response.json();
-      // Strip out markdown if AI tries to wrap it in ```
       let output = data.response.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
       setTerminalOutput(output || 'Process finished with exit code 0 (No output)');
     } catch (error) {
@@ -142,6 +145,7 @@ print("Sharper Reviews. Smarter Code.")
     }
   };
 
+  // 🛠️ FIXED: PDF Generator (Removed Emoji Gibberish)
   const handleExportPDF = (content: string) => {
     const doc = new jsPDF();
     const pageWidth = 170;
@@ -169,7 +173,14 @@ print("Sharper Reviews. Smarter Code.")
     doc.setLineWidth(0.5);
     doc.line(margin, 35, 190, 35);
 
-    const cleanContent = content.replace(/\*\*/g, "").replace(/###/g, "").replace(/`/g, "");   
+    // 🧹 CRITICAL FIX: Strip all Emojis and unprintable characters
+    const cleanContent = content
+        .replace(/\*\*/g, "") 
+        .replace(/###/g, "")  
+        .replace(/`/g, "")    
+        .replace(/[\u1000-\uFFFF]/g, '') 
+        .replace(/[^\x20-\x7E\n]/g, ''); 
+
     const lines = cleanContent.split('\n');
 
     lines.forEach((line) => {
@@ -178,6 +189,8 @@ print("Sharper Reviews. Smarter Code.")
         doc.setFont("helvetica", "normal");
 
         const trimmedLine = line.trim();
+        if (!trimmedLine) return; 
+
         const isBullet = trimmedLine.startsWith('*') || trimmedLine.startsWith('-');
         const isHeader = (line.match(/^[A-Z][a-z]+:/) || trimmedLine.endsWith(':')) && trimmedLine.length < 50;
 
@@ -190,16 +203,14 @@ print("Sharper Reviews. Smarter Code.")
             y += 8; 
         } else if (isBullet) {
             doc.setTextColor(0, 51, 102); 
-            const cleanLine = "•  " + trimmedLine.replace(/^[*|-]/, '').trim();
-            const splitLines = doc.splitTextToSize(cleanLine, pageWidth);
+            const bulletText = "-  " + trimmedLine.replace(/^[*|-]/, '').trim();
+            const splitLines = doc.splitTextToSize(bulletText, pageWidth);
             doc.text(splitLines, margin, y);
             y += (splitLines.length * 6) + 2; 
         } else {
-            if (trimmedLine.length > 0) {
-                const splitLines = doc.splitTextToSize(trimmedLine, pageWidth);
-                doc.text(splitLines, margin, y);
-                y += (splitLines.length * 5) + 2;
-            }
+            const splitLines = doc.splitTextToSize(trimmedLine, pageWidth);
+            doc.text(splitLines, margin, y);
+            y += (splitLines.length * 5) + 2;
         }
 
         if (y > 270) {
@@ -337,7 +348,6 @@ print("Sharper Reviews. Smarter Code.")
           </div>
 
           <div className="flex items-center gap-3">
-             {/* 🚀 NEW RUN BUTTON */}
              <button 
                 onClick={handleRun} 
                 disabled={isExecuting} 
@@ -360,10 +370,9 @@ print("Sharper Reviews. Smarter Code.")
           </div>
         </div>
 
-       {/* Editor Area */}
+        {/* 🛠️ FIXED: Double Scrollbar Fix */}
         <div className="flex-1 relative group min-h-0 bg-zinc-900/20 overflow-hidden flex flex-col">
           <div className="flex-1 flex relative overflow-hidden">
-            {/* 🛠️ SCROLL FIX: Line numbers now sync with the main scroll area */}
             <div 
               ref={lineNumberRef}
               className="w-12 bg-transparent border-r border-white/5 flex flex-col items-end pt-4 pr-3 text-zinc-600 text-sm font-mono select-none overflow-hidden flex-shrink-0"
@@ -373,7 +382,6 @@ print("Sharper Reviews. Smarter Code.")
                ))}
             </div>
 
-            {/* 🛠️ SCROLL FIX: Made this container the single source of truth for scrolling */}
             <div 
                 className="flex-1 relative font-mono text-sm overflow-auto"
                 onScroll={(e) => {
@@ -416,7 +424,6 @@ print("Sharper Reviews. Smarter Code.")
                 onChange={(e) => setCode(e.target.value)}
                 spellCheck="false"
                 wrap="off" 
-                // 🛠️ SCROLL FIX: Removed overflow-auto from the textarea itself, let parent handle it. Added min-h-full.
                 className="absolute inset-0 min-w-full min-h-full bg-transparent text-transparent p-4 pb-20 resize-none focus:outline-none placeholder:text-transparent caret-white whitespace-pre overflow-hidden"
                 style={{ 
                     fontFamily: 'inherit', 
@@ -432,7 +439,7 @@ print("Sharper Reviews. Smarter Code.")
           </div>
         </div>
 
-        {/* 🚀 NEW: Terminal Output Window */}
+        {/* Terminal Output Window */}
         {terminalOutput !== null && (
           <div className="h-48 flex-none border-t border-white/10 bg-black flex flex-col relative z-20 animate-in slide-in-from-bottom-5">
              <div className="h-8 flex items-center justify-between px-4 border-b border-white/5 bg-zinc-900/50">
@@ -555,10 +562,10 @@ print("Sharper Reviews. Smarter Code.")
             <button onClick={handleSend} disabled={isLoading} className="bg-white/10 group-hover:bg-white/20 size-6 overflow-hidden rounded-full duration-500 cursor-pointer flex-shrink-0 disabled:opacity-50">
               <div className="flex w-12 -translate-x-1/2 duration-500 ease-in-out group-hover:translate-x-0">
                 <span className="flex size-6 items-center justify-center">
-                  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
                 </span>
                 <span className="flex size-6 items-center justify-center">
-                  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="m-auto size-3 text-white"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
                 </span>
               </div>
             </button>
