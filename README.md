@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CodeLens
 
-## Getting Started
+> **Smarter Code Reviews for Modern Developers.**
+> 🏆 **1st Place Winner** - KG Reddy College of Engineering and Technology Hackathon (Feb 2026)
 
-First, run the development server:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 💡 The Vision
+**"Why not just paste code into ChatGPT?"**
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Because developers don't need a jack-of-all-trades chatbot; they need a specialized scalpel. CodeLens is an AI-driven, zero-friction code auditing environment. Instead of a generic chat window, we engineered an integrated tool that acts like a strict senior engineer doing a ruthless code review. 
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+CodeLens doesn't just fix typos—it actively scans for vulnerabilities, grades logic flaws, and tracks algorithmic bottlenecks. 
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ✨ Key Features
+* 🧠 **Deep AI Auditing:** Analyzes code for logic, security, and performance issues using Groq's high-speed LPU inference.
+* ⚡ **Algorithmic Metrics:** Automatically calculates real-time Time & Space complexity shifts (e.g., tracking an optimization from `O(N^2)` to `O(N)`) and generates a definitive 0-100 Health Score.
+* 💻 **Integrated Execution:** A built-in, VS Code-style simulated terminal allows you to execute code instantly in the browser without leaving the environment.
+* 📄 **Enterprise-Ready Reports:** One-click export takes the AI's analysis and formats it into a clean, professional PDF audit document for clients or managers.
+* 🎨 **Premium IDE Experience:** Features automatic language detection, real-time syntax highlighting, custom WebGL light rays, and meticulously synchronized caret tracking.
 
-## Learn More
+## 🛠️ Tech Stack
+**Frontend & UI**
+* [Next.js (React)](https://nextjs.org/) - Core framework
+* [TypeScript](https://www.typescriptlang.org/) - Type safety
+* [Tailwind CSS](https://tailwindcss.com/) - Utility-first styling
+* [OGL (WebGL)](https://github.com/oframe/ogl) - High-performance dynamic background rendering
+* [Framer Motion](https://www.framer.com/motion/) - Smooth micro-interactions and layout animations
 
-To learn more about Next.js, take a look at the following resources:
+**Backend & AI**
+* [Groq API](https://groq.com/) - Blazing fast AI inference running the `llama-3.3-70b-versatile` model.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Utilities**
+* `jsPDF` - Client-side PDF generation
+* `react-syntax-highlighter` - Native browser code parsing
+* `react-markdown` - Dynamic text formatting
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 Getting Started
 
-## Deploy on Vercel
+### Prerequisites
+Make sure you have Node.js installed, and grab a free API key from [Groq Console](https://console.groq.com/).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Installation
+just clone the repo and replace API key and hit "npm run dev", visit the local host.
